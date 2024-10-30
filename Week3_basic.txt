@@ -1,0 +1,57 @@
+- 입문 주차와 비교해서 입력 받는 방식의 차이와 공통점을 비교해보세요.
+SendMessage는 컴포넌트와 메서드의 갯수가 많을 수록 느려지고 , 문자열의 오타가나면 오류가 나기에 쓰임에 불편을 야기할 수 있다.
+input System의 Invoke Unity Event 로 사용하여 이벤트형태로 사용되기에 쓰임에 편리하다. 또한 인스펙터 창에서 등록이 가능해 편하다.
+
+입문조차와 비교해서 유니티자체에 포함되어있는 더 다양한 함수들을 많이 쓰게 되는거 같다. 
+
+공통점 : 방식은 다르되 결과물은 비슷하게 가는거 같다.
+
+
+- `CharacterManager`와 `Player`의 역할에 대해 고민해보세요.
+CharacterManager를 싱글톤으로 진행하여 게임 내에 하나만 존재 할 수 있게끔 만들어, 어디서든 이 스크립트를 통해 정보전달을 할 수 있게끔 해준다.
+Player 는 캐릭터매니저의 인스턴스에 플레이어를 집어넣어 캐릭터매니저에서 플레이어의 정보를 가져올 수 있게끔 사용한다
+
+플레이어 의 정보 = 플레이어 cs
+플레이어의 정보를 관리 = 캐릭터 매니저 cs
+
+
+- 핵심 로직을 분석해보세요 (`Move`, `CameraLook`, `IsGrounded`)
+Move
+Vector3 dir 값에 앞 뒤로 움직일 수 있게 transform.forword * curMovementInput의 y의값 그리고 좌우인 right , curMovementInput의 x 값 을 더한다. 
+그리고 dir 에 moveSpeed 를 곱해준다.
+dir.y의 값을 rigibody의 velocity의y값으로 초기화 하고
+(점프를 했을때만 위 아래로 움직일꺼기 때문에 y값을 계속 유지시키기 위해)
+세팅된 값을 rigibody.velocirty 에 넣어줘서 움직일 수 있게 한다.
+
+
+CameraLook
+mouseDelta.y의 값을 돌려줘야 플레이어가 좌우로 돌아갈 수 있기에 camCurXRot에 마우스의 y값*민감도 를 넣어줘서 화면이 돌아 수 있게 하고, clamp로 최소값 최대값을 넘어가지않게해주고, 마우스는 우리가 움직이는 거와 반대로 되기에 -camCurXRot 로 값을 구해준다  
+화면은 월드좌표기준이 아닌 로컬좌표이기에 로컬좌표로 돌려준다.
+
+IsGrounded
+연속점프를 막기 위해선 플레이어가 땅에 닿았느지 안닿았는지 확인을 해야 한다.
+그것을 Ray를 쏴서 확인을 하는데 , Ray에 플레이어가 감지되면안되기에 레이어마스크로 한정한다
+Ray를 쏘는 방향은 4방향 앞뒤좌우로 쏴야되기에 Ray를 배열로 만들어 추가해준다
+ z 축 앞뒤 x축 앞 뒤 forword, right
+new Ray(transform.position + (transform.forword * 0.2f) + (transform.up + 0.01f), Vector3.down) 
+(위치 + 앞으로 조금 움직이고  + 그라운에서 쏘면 그라운드를 확인하지 못하기에 살짝위로 올려서 플레이어에서 쏘게 끔 올린다.) , 이걸로 방향을 정해졌고 아래로 쏘게끔 down.)
+이걸 4 가지이기에 forword , -forword, right, -right 로 생성
+
+이제 Ray는 쐈으니 검출을 해야함
+for 문으로 돌려주면서 
+
+if(Physics.RayCast(rays[i], 0.1f, groundLayerMask ))
+배열을 돌면서 0.1의 길이를 쏘고, ground에 해당하는 거만 검출 
+하고나서 return ture를해주고,
+만약에 검출이 안된다면 false를 검출해준다.
+그리고 이 함수는 점프가 되는 로직에 &&연산자로 추가해주면 된다.
+
+
+- `Move`와 `CameraLook` 함수를 각각 `FixedUpdate`, `LateUpdate`에서 호출하는 이유에 대해 생각해보세요.
+rigibody처럼 물리적연산이 필요한 컴포넌트는 FixedUpdate로 호출을 해야 좋다.
+Update 는 불규칙한 호출이기에 물리엔진 충돌시 충돌검사가 제대로 안될수도 있기에 fixed를 쓰는게 좋다
+
+LateUpdate에 CameraLook를 쓰는 것은  Late는 모든 Update함수들이 호출되고나서 호출이되는데,  이것은
+카메라가 따라가는 오브젝트가 Update 함수안에서 움직일 수 있기 때문에 Late에 쓰는것이 좋다.
+
+
