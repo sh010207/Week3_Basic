@@ -149,3 +149,90 @@ void Flash()
         coroutine = StartCoroutine(FadeAway());
 }
 -> 이미지를 켲고, 이미지의 컬러를가져오고, 코루틴을 실행시킨다. (코루틴이 null이아니면 코루틴을 멈춰준다)
+
+# Unity 프로젝트의 인터페이스와 핵심 로직 개요
+
+## 1. 객체지향적 관점에서 UI 스크립트 설계의 이유
+   - **결합도와 의존성을 낮추기 위함**:
+     - UI와 로직을 분리하여 각각의 스크립트를 독립적으로 관리함으로써 결합도와 의존성이 낮아집니다. UI 스크립트는 Player 등 다른 클래스와 독립적으로 기능을 수행할 수 있어, 수정 및 유지보수 작업이 편리해집니다.
+   - **재활용성과 유연성**:
+     - `UI.cs`와 `Player.cs`와 같이 객체가 맡는 역할을 기능 단위로 분리하여 개별적으로 구현하면, 특정 기능의 재사용이 용이해지고 코드 수정 시 다른 코드에 미치는 영향을 줄일 수 있습니다.
+
+## 2. 인터페이스 (Interface) 개념과 Unity 내 구현 예시
+   - **특징**:
+     - 인터페이스는 클래스가 구현해야 하는 특정 메서드 집합을 정의하는 추상적인 개념입니다. 이를 통해 특정 메서드를 다양한 클래스가 다른 방식으로 구현할 수 있도록 지원합니다.
+     - 인터페이스는 인스턴스화가 불가능하며, 여러 개의 인터페이스를 클래스에 동시에 상속할 수 있습니다. 이는 유연성을 높이며, 특정 메서드나 속성이 반드시 구현되도록 강제합니다.
+   
+   - **예시 코드**:
+     ```csharp
+     public Interface IDamagable
+     {
+         void TakePhysicalDamage(int damageAmount);
+     }
+     ```
+     - `IDamagable` 인터페이스는 `TakePhysicalDamage` 메서드를 포함하여, 이 인터페이스를 구현하는 클래스가 `TakePhysicalDamage`를 구체화하도록 강제합니다.
+   
+   - **구현 예시**:
+     ```csharp
+     class PlayerCondition : MonoBehaviour, IDamagable
+     {
+         public void TakePhysicalDamage(int damageAmount)
+         {
+             health.Subtract(damageAmount);
+             onTakeDamage?.Invoke();
+         }
+     }
+     ```
+     - `PlayerCondition` 클래스가 `IDamagable`을 상속하여 `TakePhysicalDamage` 메서드를 구현합니다. 이 메서드는 인스턴스를 생성해 사용할 수 있습니다.
+
+   - **사용 예시** (`CampFire.cs`):
+     ```csharp
+     List<IDamagable> things = new List<IDamagable>();
+
+     private void OnTriggerEnter(Collider other)
+     {
+         if (other.gameObject.TryGetComponent(out IDamagable damagable))
+         {
+             things.Add(damagable);
+         }
+     }
+
+     void DealDamage()
+     {
+         for (int i = 0; i < things.Count; i++)
+         {
+             things[i].TakePhysicalDamage(damage);
+         }
+     }
+     ```
+     - `CampFire` 클래스는 `IDamagable` 인터페이스를 통해 다양한 객체에 데미지를 줄 수 있으며, `OnTriggerEnter`에서 충돌된 객체를 감지하여 `things` 목록에 추가합니다.
+
+## 3. 주요 클래스와 기능 분석
+
+### UI 스크립트 구조 (`UICondition.cs`)
+   - **UICondition**:
+     - UI에 표시할 플레이어의 상태 정보(체력, 배고픔, 스태미나 등)를 변수로 선언합니다.
+     - `Start` 메서드에서 캐릭터 매니저를 통해 플레이어 정보를 `this`로 받아와 필요한 UI를 초기화합니다.
+
+### Condition 관리 (`Condition.cs`)
+   - **Condition** 클래스는 플레이어의 체력, 스태미나 등의 상태 정보를 관리하며, 주요 메서드는 다음과 같습니다:
+     - **Add**: 상태를 증가시키는 메서드
+     - **Subtract**: 상태를 감소시키는 메서드
+   - **Update**: 변경된 상태를 UI에 반영하여 현재 상태를 실시간으로 보여줍니다.
+   - 이러한 `Condition` 클래스는 `PlayerCondition.cs`에서 호출하여 플레이어 상태의 증감이 반영됩니다.
+
+### CampFire 스크립트
+   - **OnTriggerEnter / OnTriggerExit**:
+     - `OnTriggerEnter`는 `IDamagable` 인터페이스를 구현한 객체가 범위 안에 들어오면 `things` 리스트에 추가합니다.
+     - `OnTriggerExit`는 범위를 벗어난 객체를 `things`에서 제거하여 지속적으로 감지합니다.
+   - **DealDamage**:
+     - `InvokeRepeating`을 사용하여 `damageRate` 간격으로 `DealDamage` 메서드를 호출합니다. `DealDamage`는 `things` 리스트의 각 객체에 데미지를 주는 로직을 구현합니다.
+
+### DamageIndicator
+   - **기능**:
+     - 데미지를 받았을 때 화면이 빨갛게 플래시되며, 이후 원래 상태로 서서히 돌아오는 UI 효과를 구현합니다.
+   - **코루틴 사용 (`FadeAway`)**:
+     - 화면의 투명도를 조절해 점진적으로 빨간색에서 정상 상태로 복구되도록 합니다.
+     - **Flash** 메서드는 이미지의 컬러를 조정하며, 이미지가 다시 보이도록 활성화한 후 `FadeAway` 코루틴을 시작합니다.
+
+
