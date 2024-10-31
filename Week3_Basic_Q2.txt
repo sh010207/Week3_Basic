@@ -1,0 +1,151 @@
+- 별도의 UI 스크립트를 만드는 이유에 대해 객체지향적 관점에서 생각해보세요.
+결합도와 의존성을 낮추기 위해라고 생각된다. 따로 관리하게되면 수정과 재활용에 용이하게된다.
+
+UI -> UI.cs , Player -> Player.cs 이런 식으로 하나의 객체가 가지는 기능을 객체에따라 나눠야 의존성과 결합도가 낮아지게되고 자연스럽게 수정과 재활용에 용이해진다.
+
+
+
+- 인터페이스의 특징에 대해 정리해보고 구현된 로직을 분석해보세요.
+인터페이스
+굉장히 범용적이다.
+그리고 인터페이스는 추상적인개념으로, 직접적으로 인스턴스x
+한 클래스는 여러개의 인터페이스를 적용할 수 없고, 인터페이스를 상속받은 클래스를 통해 구체적인 구현을 할 수 있고, 해당 클래스에서인스턴스를 생성하여 사용 할 수 있다.
+
+public Interface IDamagable
+{
+	void TakePhysicalDamage(int damageAmount);
+}
+위 코드와 같이 TakePhysicalDamage함수로 선언하고, 
+
+class PlayerCondition :   ... , IDamagable
+ -> 클래스에 상속 
+
+class PlayerCondition : .. , IDamagable
+{
+	public void TakePhysicalDamage(int damageAmount)
+    {
+        health.Subtract(damageAmount);
+        onTakeDamage?.Invoke();
+    }
+}
+ -> 클래스 내에서 함수를 정의, 매개변수로 데미지 값을 받아와서 구현
+
+CampFire.cs  
+=>   List<IDamagable> things = new List<IDamagable>(); 
+private void OnTriggerEnter(Collider other)
+    {
+        if(other.gameObject.TryGetComponent(out IDamagable damagable))
+        {
+            things.Add(damagable);
+        }
+    }
+-> 데미지를 받을 객체를 추가 해준다. 
+
+=> void DealDamage() 
+{
+	for(int i = 0; i<things.Count; i++)
+        {
+            things[i].TakePhysicalDamage(damage);
+        }
+}
+ -> 데미지를 주는 함수에서 정의해놓은 TakePhysicalDamage를 things에 있는 객체가 데미지를 받게끔 작성
+
+
+
+- 핵심 로직을 분석해보세요. (UI 스크립트 구조, `CampFire`, `DamageIndicator`)
+
+UICondition.cs
+게임 내에서 보여질 UICondition을 살펴보면, 체력, 배고픔, 스태미나 정도이기에 
+변수로 선언해준다. 그리고 그 변수들을 Start 함수로 this로 캐릭터 매니저를 통해 플레이어의 정보에 this로 자기자신을 넣어주도록한다.
+
+
+Condition.cs
+Condition은 플레이어가 가질 Condition의 정보들을 작성 해주는데, 나열해보자면,
+컨디션은, 최대값, 현재값, 그리고 점점 차오르게 할꺼기에 차오르는 값으로 변수를 생성해 줄 수 있다.
+그리곤, 기능을 보자면,
+
+Add 
+차오르는 기능을 해줘야 하기에 더해주는 함수를 만들어준다.
+
+Subtract
+컨디션들이 줄어드는 기능을 만들어줘야하기에 Subtract로 구현
+
+그리곤 이렇게 줄어들거나 더해진 컨디션의 정보를 Update로 현재상태를 출력해준다.
+
+이렇게 만들어진 컨디션정보들을 PlayerCondition.cs로 정보를 저장하여 여기서 이제 플레이어가 가진 컨디션을 줄어들게하거나 더해지도록 해준다.
+
+
+CampFire
+
+   private void OnTriggerEnter(Collider other)
+    {
+        if(other.gameObject.TryGetComponent(out IDamagable damagable))
+        {
+            things.Add(damagable);
+        }
+    }
+-> 부딪힌 ther가 IDamagable컴포넌트를 들고있다면 things에 추가해준다.
+
+    private void OnTriggerExit(Collider other)
+    {
+        if(other.gameObject.TryGetComponent(out IDamagable damagable))
+        {
+            things.Remove(damagable);
+        }
+    }
+-> 부딪힌 객체가 콜라이더에서 떨어졌다면, things에서 삭제해준다.
+
+    void DealDamage()
+    {
+        for(int i = 0; i<things.Count; i++)
+        {
+            things[i].TakePhysicalDamage(damage);
+        }
+    }
+-> 위에서말한 things 데미지를 준다.
+
+    private void Start()
+    {
+        InvokeRepeating("DealDamage", 0, damageRate);
+    }
+-> damageRate만큼 DealDamage함수를 호출해준다.
+
+
+ DamageIndicator
+Damage를 받으면 화면이 빨개졌다가 서서히 돌아오는 기능을 맡고있다. ( Coroutine 사용)
+
+-> private Coroutine coroutine; ( 코루틴 변수 생성)
+
+   private IEnumerator FadeAway()
+    {
+        float startAlpha = 0.3f;
+        float a = startAlpha;
+
+        while(a > 0.0f)
+        {
+            a -= (startAlpha / flashSpeed) * Time.deltaTime;
+            image.color = new Color(1f, 105f / 255f, 105f / 255f, a);
+            yield return null;
+        }
+
+        image.enabled = false;
+    }
+-> a 에 알파값을 넣어놓고 while문을 통해 돌아오고, 이미지를 꺼준다.
+
+
+ 빨개져있는 이미지를 가져오고 어느정도의 속도로 돌아올지를 정해줄 변수를 만들어준다.
+   ->  public Image image;
+    -> public float flashSpeed;
+그리고 이미지를 켜주면서 코루틴을 실행시켜준다.
+void Flash()
+{
+	 if(coroutine != null)
+        {
+            StopCoroutine(coroutine);
+        }
+
+        image.enabled = true;
+        image.color = new Color(1f, 105f/255f, 105f/255f);
+        coroutine = StartCoroutine(FadeAway());
+}
+-> 이미지를 켲고, 이미지의 컬러를가져오고, 코루틴을 실행시킨다. (코루틴이 null이아니면 코루틴을 멈춰준다)

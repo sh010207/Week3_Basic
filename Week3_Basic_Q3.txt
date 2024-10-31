@@ -1,0 +1,73 @@
+- `Interaction` 기능의 구조와 핵심 로직을 분석해보세요.
+Interaaction은 카메라기준으로 중심에서 Ray를 쏘면서 이미 검출되었던게 있을 수 있고, 검출을 했을 때 없을 수도 있기때문에 최신화를 맡은 cs이다
+그렇기에 변수를 만들 때,
+업데이트를 할 시간 -> float cheakLate
+마지막으로 체크한 시간 -> float lastCheckTime;
+얼마나 멀리 있는 걸 체크할지 -> float maxCheckDistance;
+어떤 레이어가 달려있는 오브젝트를 추출할지 -> LayMask layerMask;
+
+캐싱
+어떤 게임오브젝트를 상호작용할지 -> GameObject  curInteractGameObject;
+만들어놨던 인터페이스 -> IInteractble  curInteractble
+
+게임의 정보를 프롬포트에 띄어줄 변수 -> TextMashProUGUI prompt;
+카메라의 정보 -> Camera camera;
+
+Update에 Ray를 쏜다
+void Update()
+    {
+        if(Time.time - lastCheckTime > checkRate)
+        {
+            lastCheckTime = Time.time;
+
+            Ray ray = camera.ScreenPointToRay(new Vector3(Screen.width / 2, Screen.height / 2));
+            RaycastHit hit;
+
+            if(Physics.Raycast(ray, out hit, maxCheckDistance, layerMask))
+            {
+                if(hit.collider.gameObject != curInteractGameObject)
+                {
+                    curInteractGameObject = hit.collider.gameObject;
+                    curInteractable = hit.collider.GetComponent<IInteractable>();
+                    SetPromptText();
+                }
+            }
+            else
+            {
+                curInteractGameObject = null;
+                curInteractable = null;
+                promptText.gameObject.SetActive(false);
+            }
+-> 화면에 가운데에서 Ray를 쏘고 맞은 오브젝트의 레이어를 확인해주고 정해놓은 레이어가 맞다면, prompt에 정보를 띄어준다. 만약 Ray에 맡은 오브젝트가 정해놓은 레이어가 아니라면, prompt 오브젝트를 비활성화 시키고, 현재 오브젝트와 정보들을 null로 만들어준다.
+
+
+
+    public void OnInteractInput(InputAction.CallbackContext context)
+    {
+        if(context.phase == InputActionPhase.Started && curInteractable != null)
+        {
+            curInteractable.OnInteract();
+            curInteractGameObject = null;
+            curInteractable = null;
+            promptText.gameObject.SetActive(false);
+        }
+    }
+-> inputAction으로 정해놓은 상호작용버튼을 눌렀을 때 진행되는 로직이다.  curInteractable에 담긴 정보들을 OnInteract() ->(    public void OnInteract()
+    {
+        CharacterManager.Instance.Player.itemData = data;
+        CharacterManager.Instance.Player.addItem?.Invoke();
+        Destroy(gameObject);
+    })
+함수로 정보들을 넘기고,   curInteractGameObject에 담겨져있는 오브젝트를 null로 만들고, curInteractable도 null로만들고, prompt오브젝트도  비활성화시킨다.
+
+- `Inventory` 기능의 구조와 핵심 로직을 분석해보세요.
+e키를 눌러 인벤을 띄우고, 위에서 담아온  상호작용으로 넘긴 데이터를 표시하는 기능을 가졌다.
+인벤에서 아이템을 사용하고, 버리고, 장착하고, 장착해제하고, 아이템을 눌러 어떤아이템을 사용할지말지를 정할 수 있게 한다.
+
+구조
+아이템슬롯은 버튼으로 만들고, 수량표시를 하고, 그 아이템을 누르면 정보를 띄우고 , 아이템에 타입에따라 사용하는아이템이면 장착이아닌 사용하기가 뜨고, 장착하는 아이템이면, 장착하기, 또는 장착 해제 버튼이 띄우게 한다.
+그렇기 때문에 어떤 아이템을 셀렉했는지 정보를 담아올 변수들을 만들어서 사용한다.
+또한, 인벤을 띄우면 커서가 보여야하기에 커서를 띄우는 함수를 만들어서 사용하고, 아이템을 사용하거나 버리면 인벤에서 업데이트를 해줘야하기에 업데이트하는 함수를 만든다.
+
+아이템의 수량을 표시해주는 함수, 각 각 버튼이 어떤 기능을 담고 있는지에 대한 함수, 상호작용한 아이템이 인벤에 들어 올 수 있게 하는 함수까지 Inventory가 가지고 있는 기능과 구조이다.
+
